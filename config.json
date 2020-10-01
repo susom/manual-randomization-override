@@ -1,9 +1,9 @@
 {
-	"name": "ClassNameHere",
+	"name": "Radomizer Overide",
 
-	"namespace": "Stanford\\ClassNameHere",
+	"namespace": "Stanford\\RandomizerOveride",
 
-	"description": "A template for a REDCap External Module",
+	"description": "EM that allows manual setting of fields that draw values from Randomized Allocation Tables",
 
 	"documentation": "README.md",
 
@@ -12,30 +12,34 @@
 			"name": "Andrew Martin",
 			"email": "andy123@stanford.edu",
 			"institution": "Stanford University"
+		},
+		{
+			"name": "Irvin Szeto",
+			"email": "irvins@stanford.edu",
+			"institution": "Stanford University"
 		}
 	],
 
 	"permissions": [
-		"redcap_module_system_enable",
-		"redcap_module_project_enable",
-		"redcap_module_save_configuration"
+		"redcap_data_entry_form_top",
+		"redcap_save_record"
 	],
 	
+	"framework-version": 4,
+
 	"enable-every-page-hooks-on-system-pages": false,	
 
 	"links": {
 		"project": [
-
 		],
 		"control-center": [
-
 		]
 	},
 
 	"no-auth-pages": [
-
+      "ajax/handler"
 	],
-
+	
 	"project-settings": [
 		{
 			"key": "enable-project-debug-logging",
