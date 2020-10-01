@@ -7,7 +7,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
 
-	private $randomizer_rid, $target_field, $source_fields;
+	private $randomizer_rid, $target_field, $source_fields, $project_status, $grouping;
 	
     public function __construct() {
 		parent::__construct();
@@ -81,7 +81,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 							// preset them to show none avaialble, then unset if they actualy are available
 							overide_ui_el.find(".choicevert").unbind("click");
 							overide_ui_el.find(".choicevert").click(function(){
-								alert("No allocations for this target_value are available for this combination of strata.");
+								alert("No allocations for this target value are available for this combination of strata.");
 							});
 							if( !$.isEmptyObject(result) ){
 								// enable manual overide inputs
@@ -186,6 +186,11 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$this->randomizer_rid 	= $data["rid"];
 				$this->target_field 	= $data["target_field"];
 
+				//TODO what and where these come from
+				$this->group_by 		= $data["group_by"];
+				$this->grouping 		= null;
+				$this->project_status 	= 0;
+
 				$non_empty 				= array_filter($data);
 				$source_fields_arr		= array();
 				foreach($non_empty as $key => $val){
@@ -208,8 +213,10 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		}
 		$source_field_values 	= implode(" AND ", $temp);
 		$target_field_values 	= array();
+		$project_status 		= ""; // " AND project_status=0
+		$grouping 				= ""; // " AND group_id=n
 		if(!empty($this->randomizer_rid)){
-			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=".$this->randomizer_rid." AND $source_field_values";
+			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=".$this->randomizer_rid." AND $source_field_values $project_status $grouping";
 			$q 		= $this->query($sql, array());
 			if($q->num_rows){
 				while ($data = db_fetch_assoc($q)) {
@@ -236,9 +243,11 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 			$temp[] = "$source_field = $val";
 		}
 		$source_field_values 	= implode(" AND ", $temp);
+		$project_status 		= ""; // " AND project_status=0
+		$grouping 				= ""; // " AND group_id=n
 
 		//TODO will have to factor in "project_status" and "group_id"
-		$sql 					= "SELECT * FROM redcap_randomization_allocation WHERE $source_field_values AND target_field=$desired_target_value" ;
+		$sql 					= "SELECT * FROM redcap_randomization_allocation WHERE $source_field_values AND target_field=$desired_target_value $project_status $grouping" ;
 		$q 						= $this->query($sql, array());
 		$this->emDebug("sql to search for available strata + target values, ", $sql);
 
