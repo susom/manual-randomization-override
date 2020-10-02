@@ -66,8 +66,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		};
 		
 		// if not, check if person has user rigths to do manual override?
-		$override_users = array();
-		if(!in_array( USERID, $override_users) && false){
+		$overide_users = array_map('trim', explode(',', $this->getProjectSetting('override-user-list')));
+		if(!in_array( USERID, $overide_users)){
 			return;
 		}
 		
@@ -223,7 +223,9 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $_POST[$this->target_field] : null;
 			if(!empty($desired_target_value)){
-				$source_field_arr 	= array();
+				/* TODO EVERYTHING FROM HERE TO... */
+				
+				$source_fields 	= array();
 				// Need to getData for strata fields that are OFF the current instrument then combine with these values before trying to save
 				
 				// this is a pain
@@ -231,13 +233,13 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
 					$source_field_value 				= !empty($_POST[$source_field_var]) ? $_POST[$source_field_var] : null;
-					$source_field_arr[$source_field] 	= $source_field_value;
+					$source_fields[$source_field] 	= $source_field_value;
 
 					if(is_null($source_field_value)){
 						array_push($check_fields, $source_field_var);
 					}
 				}
-				$this->emDebug("source_field_arr from current instrument and remaining fields to check",$source_field_arr, $check_fields, $strata_source_lookup);
+				$this->emDebug("source_fields from current instrument and remaining fields to check",$source_fields, $check_fields, $strata_source_lookup);
 
 				// look up remaining strata (may be hiding in other instruments)
 				$q              = REDCap::getData('json', array($record_id) , $check_fields);
@@ -246,15 +248,15 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$remainder      = array_filter($record);
 				$this->emDebug("remaining values if any", $remainder);
 
-				//loop through any found strata values and fill in the full source_field_arr array
+				//loop through any found strata values and fill in the full source_fields array
 				foreach($remainder as $strata_fieldname => $val){
 					$source_field = $strata_source_lookup[$strata_fieldname];
-					$source_field_arr[$source_field] = $val;
+					$source_fields[$source_field] = $val;
 				}
-				$this->emDebug("the new source_Field_arr?", $source_field_arr, $strata_source_lookup);
+				$this->emDebug("the new source_fields?", $source_fields, $strata_source_lookup);
+				/* TODO TO HERE IS SIMILAR TO A BLOCK IN ajax/handler.php  SO SHOULD BREAK IT OUT... */
 				
-				
-				$this->claimAllocationValue($record_id, $desired_target_value, $source_field_arr);
+				$this->claimAllocationValue($record_id, $desired_target_value, $source_fields);
 
 				// STORE INTO EM Project Settings REcord of Manual Overide
 				$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
@@ -263,7 +265,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason);
 				$this->setProjectSetting(KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
 				// $this->emDebug("overide_records", $overriden_records);
-				// $this->emDebug("augment save with randomizer overide functionality", $_POST, $source_field_arr);
+				// $this->emDebug("augment save with randomizer overide functionality", $_POST, $source_fields);
 			}else{
 				$this->emDebug("missing target value");
 			}
