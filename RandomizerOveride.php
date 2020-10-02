@@ -2,50 +2,111 @@
 namespace Stanford\RandomizerOveride;
 
 require_once "emLoggerTrait.php";
+use REDCap;
+use Randomization;
+use Records;
 
 class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
-
+	
     use emLoggerTrait;
 
-	private $randomizer_rid, $target_field, $source_fields, $project_status, $grouping;
+	const KEY_OVERRIDE_RECORDS 	= "override-record-list";
+	const KEY_OVERRIDE_USERS 	= "override-user-list";
+
+	private $randomizer_rid, 
+			$target_field, 
+			$source_fields, 
+			$randomization, 
+			$project_status, 
+			$grouping;
 	
     public function __construct() {
 		parent::__construct();
 		// Other code to run when object is instantiated
-
-		// small query, do it everytime we come to an add/edit entry page , or try to only limit call to pages with randomization that have not been set yet
-		$this->getAllocationDetails();
 	}
 
 	/* 
 		Inserting UI to allow for MANual Overide fo Randomization Fields
 	*/
-	public function redcap_data_entry_form_top(  ) {
-		$ajaxurl 	=  $this->getUrl('ajax/handler.php', true, true);
+	public function redcap_data_entry_form_top( $project_id, $record, $instrument, $event_id, $group_id = NULL, $repeat_instance = 1 ) {
+		$this->loadRandomizationDetails();
+
+		// Randomization isn't enabled
+		if(empty($this->randomization) ){
+			return;	
+		}
+		
+		$record_id = $_GET["id"];
+		
+		// Is the current instrument the randomization insturment? if no, then do nothing
+		// $this->emDebug($instrument);
+
+		// Is the record already randomized
+        list($randField, $randValue) = Randomization::getRandomizedValue($record_id);
+        if (!empty($randValue)) {
+			$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
+			$overriden_records 	= json_decode($temp,1);
+			// if yes, then see if it was overrided, 
+			if( isset($overriden_records[$record_id]) ){
+				$reason 		= $overriden_records[$record_id]["reason"];
+				$change_date 	= $overriden_records[$record_id]["date"];
+				$change_user 	= $overriden_records[$record_id]["user"];
+				?>
+				<script>
+				$(window).on('load', function () {
+					// need to check for the alreadyRandomizedText
+					//if yes, then insert js to update 'already randomized' text to indicate details about how random value was set... who did it, when they did it, and why they did it.
+					if($("#alreadyRandomizedText").length){
+						$("#alreadyRandomizedText").css("color","firebrick").html("Randomization overriden by <b><?=$change_user?></b> on <span><?=$change_date?></span> <div>Reason : \"<?=$reason?>\"</div>");
+					}
+				});
+				</script>
+				<?php
+			}
+		};
+		
+		// if not, check if person has user rigths to do manual override?
+		$override_users = array();
+		if(!in_array( USERID, $override_users) && false){
+			return;
+		}
+		
+		$ajaxurl 	=  $this->getUrl('ajax/handler.php');
 		?>
 		<script>
 		//  this over document.ready because we need this last!
 		$(window).on('load', function () {
 			// need to check for the redcapRandomizeBtn, already done ones wont have it
 			if($("#redcapRandomizeBtn").length){
-				// ADD NEW BUTTON OR ENTIRELY NEW UI?
-				// EXISTING UI ALREADY AVAILABLE, REVEAL AND AUGMENT
+				// ADD NEW BUTTON OR ENTIRELY NEW UI
 				var clone_or_show = $("#randomizationFieldHtml");
-				clone_or_show.css("display","block");
 				clone_or_show.addClass("custom_override")
 				
+				// EXISTING UI ALREADY AVAILABLE, REVEAL AND AUGMENT
 				var custom_label 	= $("<h6>").addClass("custom_label").text("Manually set value:");
 				clone_or_show.prepend(custom_label);
 				
 				var custom_or 		= $("<h5>").addClass("custom_or").text("-or-");
 				clone_or_show.prepend(custom_or);
 				
+				var custom_reason 	= $("<input>").attr("type","text").attr("name","custom_override_reason").prop("placeholder" , "reason for using overide?").addClass("custom_reason");
+				clone_or_show.append(custom_reason);
+
 				var custom_note 	= $("<small>").addClass("custom_note").text("*Claims next available slot for value from the allocation table");
 				clone_or_show.append(custom_note);
 
 				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_overide").val(true);
 				clone_or_show.prepend(custom_hidden);
+				
+				var show_overide 	= $("<button>").addClass("jqbuttonmed ui-button ui-corner-all ui-widget btn-danger custom_btn").text("Manual Selection").click(function(e){
+					e.preventDefault();
+					clone_or_show.css("display","block");
+					$(this).prop("disabled",true);
+				});
+
 				$("#redcapRandomizeBtn").after(clone_or_show);
+				$("#redcapRandomizeBtn").after(show_overide);
+
 
 				//ONLY ENABLE MANUAL IF STRATA ARE ALL FILLED
 				var source_fields  = <?= json_encode($this->source_fields) ?>;
@@ -89,11 +150,6 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 									overide_ui_el.find("input[value='"+target_value+"'").prop("disabled",false);
 									overide_ui_el.find("input[value='"+target_value+"'").parents(".choicevert").unbind("click");
 								}
-							}else{
-								// add alert that no allocations available for this combination of strata
-								overide_ui_el.find(".choicevert").click(function(){
-									alert("No allocations for this value are available for this combination of strata.");
-								});
 							}
 						}
 					});
@@ -107,6 +163,22 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		});
 		</script>
 		<style>
+			.custom_reason{
+				padding: 5px;
+				margin: 8px 0 0;
+			}
+			.custom_btn{
+				margin-left:5px;
+				padding:3px 8px; 
+				background:#bd2130;
+				color:#fff;
+				cursor:pointer;
+			}
+			.custom_btn:disabled{
+				background: #cccccc;
+				border-color: #999;
+				color: #999;
+			}
 			.custom_override {
 				font-size:130%;
 				color:#000;
@@ -135,27 +207,11 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	/* 
 		Updates allocation table when manually overidden and saved
 	*/
-	public function redcap_save_record() {
-		/* 
-			On Save Record 
-			Find the unclaimed 
-
-			(
-				[submit-action] => submit-btn-saverecord
-				[hidden_edit_flag] => 1
-				[__old_id__] => 4
-				[record_id] => 4
-				[strata_1] => 1
-				[strata_1___radio] => 1
-				[strata_2] => 1
-				[strata_2___radio] => 1
-				[outcome] => 1
-				[outcome___radio] => 1
-				[my_first_instrument_complete] => 0
-			)
-		*/
-
+	public function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance=1) {
+		//Look for custom post var for randomizer 
 		if(isset($_POST["randomizer_overide"])){
+			$this->loadRandomizationDetails();
+
 			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $_POST[$this->target_field] : null;
 			if(!empty($desired_target_value)){
 				$source_field_arr 	= array();
@@ -165,7 +221,15 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				}
 				$record_id = $_POST["record_id"];
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_field_arr);
-				$this->emDebug("augment save with randomizer overide functionality", $_POST, $source_field_arr);
+
+				// STORE INTO EM Project Settings REcord of Manual Overide
+				$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
+				$overriden_records 	= json_decode($temp, 1);
+				$reason 			= !empty($_POST["custom_override_reason"]) ? $_POST["custom_override_reason"] : "n/a";
+				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason);
+				$this->setProjectSetting(KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
+				// $this->emDebug("overide_records", $overriden_records);
+				// $this->emDebug("augment save with randomizer overide functionality", $_POST, $source_field_arr);
 			}else{
 				$this->emDebug("missing target value");
 			}
@@ -175,7 +239,10 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	/* 
 		Returns randomization details like RID + strata details + target field name
 	*/
-	public function getAllocationDetails(){
+	public function loadRandomizationDetails(){
+		/** @var \Project $Proj */
+		global $Proj;
+
 		// FIND THE randomization details (target + sourcefields) ENTRY IN redcap_randomization
 		$pid 	= $this->getProjectId();
 		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = $pid" ;
@@ -189,7 +256,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				//TODO what and where these come from
 				$this->group_by 		= $data["group_by"];
 				$this->grouping 		= null;
-				$this->project_status 	= 0;
+				$this->project_status 	= $Proj->project["status"];
+				$this->randomization 	= $Proj->project["randomization"];
 
 				$non_empty 				= array_filter($data);
 				$source_fields_arr		= array();
@@ -207,13 +275,15 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		Returns array of count of available allocation slots for strata combo
 	*/
 	public function checkAllocationAvailability($source_field_arr){
+		$this->loadRandomizationDetails();
+		
 		$temp = array();
 		foreach($source_field_arr as $source_field => $val){
 			$temp[] = "$source_field = $val";
 		}
 		$source_field_values 	= implode(" AND ", $temp);
 		$target_field_values 	= array();
-		$project_status 		= ""; // " AND project_status=0
+		$project_status 		= " AND project_status = " . $this->project_status; // " AND project_status=0
 		$grouping 				= ""; // " AND group_id=n
 		if(!empty($this->randomizer_rid)){
 			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=".$this->randomizer_rid." AND $source_field_values $project_status $grouping";
@@ -236,20 +306,22 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	/* 
 		Updates next available allocation slot that matches strata combo for specified record
 	*/
-	public function claimAllocationValue($record_id=4, $desired_target_value=1, $source_field_arr=array("source_field1"=>1, "source_field2" => 1)){
+	public function claimAllocationValue($record_id, $desired_target_value, $source_field_arr){
+		$this->loadRandomizationDetails();
+	
 		// SELECT TO FIND FIRST AVAILABLE TARGET VALUE WITH MATCHING STRATA
 		$temp = array();
 		foreach($source_field_arr as $source_field => $val){
 			$temp[] = "$source_field = $val";
 		}
 		$source_field_values 	= implode(" AND ", $temp);
-		$project_status 		= ""; // " AND project_status=0
+		$project_status 		= " AND project_status = " . $this->project_status; // " AND project_status=0
 		$grouping 				= ""; // " AND group_id=n
 
 		//TODO will have to factor in "project_status" and "group_id"
 		$sql 					= "SELECT * FROM redcap_randomization_allocation WHERE $source_field_values AND target_field=$desired_target_value $project_status $grouping" ;
 		$q 						= $this->query($sql, array());
-		$this->emDebug("sql to search for available strata + target values, ", $sql);
+		// $this->emDebug("sql to search for available strata + target values, ", $sql);
 
 		if($q->num_rows){
 			while ($data = db_fetch_assoc($q)) {
