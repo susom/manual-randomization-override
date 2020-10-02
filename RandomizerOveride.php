@@ -98,18 +98,19 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_overide").val(true);
 				clone_or_show.prepend(custom_hidden);
 				
+				//ONLY ENABLE MANUAL IF STRATA ARE ALL FILLED
+				var source_fields  	= <?= json_encode($this->source_fields) ?>;
 				var show_overide 	= $("<button>").addClass("jqbuttonmed ui-button ui-corner-all ui-widget btn-danger custom_btn").text("Manual Selection").click(function(e){
 					e.preventDefault();
 					clone_or_show.css("display","block");
+					checkStrataComplete(source_fields, clone_or_show);
+
 					$(this).prop("disabled",true);
 				});
 
 				$("#redcapRandomizeBtn").after(clone_or_show);
 				$("#redcapRandomizeBtn").after(show_overide);
 
-
-				//ONLY ENABLE MANUAL IF STRATA ARE ALL FILLED
-				var source_fields  = <?= json_encode($this->source_fields) ?>;
 				for(var i in source_fields){
 					$("input[name='"+source_fields[i]+"']").siblings( ".choicevert" ).find(":input").change(function(){
 						checkStrataComplete(source_fields, clone_or_show);
@@ -117,33 +118,41 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				}
 			}
 
+			// CHECK NEWLY (not yet saved) INPUT STRATA ON CURRENT INSTRUMENT, BUT ALSO CHECK SAVED STRATA FROM OTHER INSTURMENTS
 			function checkStrataComplete(source_fields, overide_ui_el){
-				var complete = true;
+				var complete 			= true;
+				var source_field_values = {};
+				var check_fields 		= [];
 				for(var i in source_fields){
-					if(!hasValue( "input[name='"+source_fields[i]+"']" ) ){
-						complete = false;
-						break;
+					var source_val = null;
+					if($("input[name='"+source_fields[i]+"']").length && !$("input[name='"+source_fields[i]+"']").val() == ""){
+						var source_val  = $("input[name='"+source_fields[i]+"']").val();
+					}else{
+						check_fields.push(source_fields[i]);
 					}
+					source_field_values[i] = source_val;
 				}
+				console.log("get what we can from this instrument, ajax for the rest",source_field_values, check_fields);
 
-				if(complete){
-					var source_field_values = {};
-					for(var i in source_fields){
-						source_field_values[i] = $("input[name='"+source_fields[i]+"']").val();
-					}
-
-					var data = {"source_fields" : source_field_values};
-					$.ajax({
-						url: "<?= $ajaxurl ?>",
-						type:'POST',
-						data: data,
-						dataType: 'json',
-						success:function(result){
-							// preset them to show none avaialble, then unset if they actualy are available
-							overide_ui_el.find(".choicevert").unbind("click");
+				// first AJAX GET all values
+				var data = {"action" : "check_remaining", "record_id" : <?=$record_id?>, "source_fields" : source_field_values, "check_fields" : check_fields, "strata_fields" : source_fields};
+				$.ajax({
+					url: "<?= $ajaxurl ?>",
+					type:'POST',
+					data: data,
+					dataType: 'json',
+					success:function(result){
+						// preset them to show none avaialble, then unset if they actualy are available
+						overide_ui_el.find(".choicevert").unbind("click");
+						if(result.hasOwnProperty("error")){
+							overide_ui_el.find(".choicevert").click(function(){
+								alert("Incomplete strata, allocation values unavailable.");
+							});
+						}else{
 							overide_ui_el.find(".choicevert").click(function(){
 								alert("No allocations for this target value are available for this combination of strata.");
 							});
+
 							if( !$.isEmptyObject(result) ){
 								// enable manual overide inputs
 								for(var target_value in result){
@@ -152,9 +161,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 								}
 							}
 						}
-					});
-					
-				}
+					}
+				});
 			}
 
 			function hasValue(elem) {
@@ -211,15 +219,41 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		//Look for custom post var for randomizer 
 		if(isset($_POST["randomizer_overide"])){
 			$this->loadRandomizationDetails();
+			$record_id = $_POST["record_id"];
 
 			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $_POST[$this->target_field] : null;
 			if(!empty($desired_target_value)){
 				$source_field_arr 	= array();
+				// Need to getData for strata fields that are OFF the current instrument then combine with these values before trying to save
+				
+				// this is a pain
+				$check_fields 			= array();
+				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
 					$source_field_value 				= !empty($_POST[$source_field_var]) ? $_POST[$source_field_var] : null;
 					$source_field_arr[$source_field] 	= $source_field_value;
+
+					if(is_null($source_field_value)){
+						array_push($check_fields, $source_field_var);
+					}
 				}
-				$record_id = $_POST["record_id"];
+				$this->emDebug("source_field_arr from current instrument and remaining fields to check",$source_field_arr, $check_fields, $strata_source_lookup);
+
+				// look up remaining strata (may be hiding in other instruments)
+				$q              = REDCap::getData('json', array($record_id) , $check_fields);
+				$results        = json_decode($q,true);
+				$record         = current($results);
+				$remainder      = array_filter($record);
+				$this->emDebug("remaining values if any", $remainder);
+
+				//loop through any found strata values and fill in the full source_field_arr array
+				foreach($remainder as $strata_fieldname => $val){
+					$source_field = $strata_source_lookup[$strata_fieldname];
+					$source_field_arr[$source_field] = $val;
+				}
+				$this->emDebug("the new source_Field_arr?", $source_field_arr, $strata_source_lookup);
+				
+				
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_field_arr);
 
 				// STORE INTO EM Project Settings REcord of Manual Overide
@@ -279,6 +313,12 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		
 		$temp = array();
 		foreach($source_field_arr as $source_field => $val){
+			if(empty($val)){
+				//empty val, so dont bother
+				$this->emDebug("missing sourcefield val for $source_field");
+				return array("error" => "incomplete strata");
+				break;
+			}
 			$temp[] = "$source_field = $val";
 		}
 		$source_field_values 	= implode(" AND ", $temp);
