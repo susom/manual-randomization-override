@@ -31,6 +31,12 @@
 
 	"links": {
 		"project": [
+			{
+		        "name": "Log of Manual Randomization Overides",
+		        "icon": "brick",
+		        "url": "pages/manual_log.php",
+		        "show-header-and-footer": false
+			 }
 		],
 		"control-center": [
 		]

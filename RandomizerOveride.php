@@ -381,5 +381,27 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$this->emDebug("random target value set to $desired_target_value for record id $record_id");
 			}
 		}
-	}			
+	}	
+	
+	/*
+		get logs of all manual randomizers
+	*/
+	public function getManualRandomizationOverideLogs(){
+		$this->loadRandomizationDetails();
+		$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
+		$overriden_records 	= json_decode($temp,1);
+		ksort($overriden_records);
+
+		$recordids  = array_keys($overriden_records);
+		$fields     = array("record_id", $this->target_field);
+		$q          = \REDCap::getData('json',$recordids , $fields);
+		$results    = json_decode($q,true);
+
+		foreach($results as $result){
+			$record_id 	= $result["record_id"];
+			$outcome 	= $result["outcome"];
+			$overriden_records[$record_id]["grouping"] = $outcome;
+		}
+		return $overriden_records;
+	}
 }
