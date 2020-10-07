@@ -5,4 +5,5 @@ Currently REDCAP has no mechanism to bypass the randomizer functionality.
 
 This EM will inject appropriate UI into the "add/edit" flow to allow the user to manually select the desired value, and subsequently "claim" the allocated value in the allocation table.  
 
-If all allocated values are already claimed, an error should display?
+If all allocated values are already claimed the UI inputs will remain "disabled"
+
