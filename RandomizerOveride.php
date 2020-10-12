@@ -25,6 +25,17 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		// Other code to run when object is instantiated
 	}
 
+	/*
+
+	*/
+	public function hasPermission(){
+		// if not, check if person has user rigths to do manual override?
+		$overide_users = array_map('trim', explode(',', $this->getProjectSetting(self::KEY_OVERRIDE_USERS)));
+		if(!in_array( USERID, $overide_users)){
+			return false;
+		}
+		return true;
+	}
 	/* 
 		Inserting UI to allow for MANual Overide fo Randomization Fields
 	*/
@@ -44,7 +55,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		// Is the record already randomized
         list($randField, $randValue) = Randomization::getRandomizedValue($record_id);
         if (!empty($randValue)) {
-			$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
+			$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 			$overriden_records 	= json_decode($temp,1);
 			// if yes, then see if it was overrided, 
 			if( isset($overriden_records[$record_id]) ){
@@ -66,8 +77,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		};
 		
 		// if not, check if person has user rigths to do manual override?
-		$overide_users = array_map('trim', explode(',', $this->getProjectSetting('override-user-list')));
-		if(!in_array( USERID, $overide_users)){
+		if(!$this->hasPermission()){
 			return;
 		}
 		
@@ -83,29 +93,41 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				clone_or_show.addClass("custom_override")
 				
 				// EXISTING UI ALREADY AVAILABLE, REVEAL AND AUGMENT
-				var custom_label 	= $("<h6>").addClass("custom_label").text("Manually set value:");
+				var custom_label 	= $("<h6>").addClass("custom_label").addClass("mt-2").text("Manually override and set randomization variable as:");
 				clone_or_show.prepend(custom_label);
 				
-				var custom_or 		= $("<h5>").addClass("custom_or").text("-or-");
-				clone_or_show.prepend(custom_or);
 				
+				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_overide").val(true);
+				clone_or_show.prepend(custom_hidden);
+
 				var custom_reason 	= $("<input>").attr("type","text").attr("name","custom_override_reason").prop("placeholder" , "reason for using overide?").addClass("custom_reason");
 				clone_or_show.append(custom_reason);
 
-				var custom_note 	= $("<small>").addClass("custom_note").text("*Claims next available slot for value from the allocation table");
+				// var custom_or 		= $("<small>").addClass("custom_or").text("*Manually override and set randomization variable as:");
+				// clone_or_show.prepend(custom_or);
+				
+				var custom_note 	= $("<small>").addClass("custom_note").text("*Press save to continue");
 				clone_or_show.append(custom_note);
 
-				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_overide").val(true);
-				clone_or_show.prepend(custom_hidden);
+				
 				
 				//ONLY ENABLE MANUAL IF STRATA ARE ALL FILLED
 				var source_fields  	= <?= json_encode($this->source_fields) ?>;
 				var show_overide 	= $("<button>").addClass("jqbuttonmed ui-button ui-corner-all ui-widget btn-danger custom_btn").text("Manual Selection").click(function(e){
 					e.preventDefault();
-					clone_or_show.css("display","block");
+					
+					if(clone_or_show.is(":visible")){
+						$("#redcapRandomizeBtn").prop("disabled",false);
+					}else{
+						$("#redcapRandomizeBtn").prop("disabled",true);
+					}
+					
+					clone_or_show.toggle();
+					
+
 					checkStrataComplete(source_fields, clone_or_show);
 
-					$(this).prop("disabled",true);
+					// $(this).prop("disabled",true);
 				});
 
 				$("#redcapRandomizeBtn").after(clone_or_show);
@@ -135,7 +157,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				console.log("get what we can from this instrument, ajax for the rest",source_field_values, check_fields);
 
 				// first AJAX GET all values
-				var data = {"action" : "check_remaining", "record_id" : <?=$record_id?>, "source_fields" : source_field_values, "check_fields" : check_fields, "strata_fields" : source_fields};
+				var data = {"action" : "check_remaining", "record_id" : "<?=$record_id?>", "source_fields" : source_field_values, "check_fields" : check_fields, "strata_fields" : source_fields};
 				$.ajax({
 					url: "<?= $ajaxurl ?>",
 					type:'POST',
@@ -213,6 +235,16 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	}
 
 	/* 
+		Inserting UI to allow for MANual Overide fo Randomization Fields
+	*/
+	public function redcap_module_link_check_display($link){
+		$this->emDebug("side links", $link);
+		if($this->hasPermission()){
+			return $link;
+		}
+	}
+
+	/* 
 		Updates allocation table when manually overidden and saved
 	*/
 	public function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance=1) {
@@ -259,13 +291,15 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_fields);
 
 				// STORE INTO EM Project Settings REcord of Manual Overide
-				$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
+				$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 				$overriden_records 	= json_decode($temp, 1);
 				$reason 			= !empty($_POST["custom_override_reason"]) ? $_POST["custom_override_reason"] : "n/a";
-				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason);
-				$this->setProjectSetting(KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
+				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason, "project_status" => $this->project_status);
+				$this->setProjectSetting(self::KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
 				// $this->emDebug("overide_records", $overriden_records);
 				// $this->emDebug("augment save with randomizer overide functionality", $_POST, $source_fields);
+
+				REDCap::logEvent("randomization manually overidden for this record", $desired_target_value);
 			}else{
 				$this->emDebug("missing target value");
 			}
