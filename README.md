@@ -1,9 +1,15 @@
-# Randomizer Overide
-This EM will allow for manual overide of "randomizer" fields.  Namely the fields where values are drawn from a pregenerated allocation table.
+# Manual Randomization Overide
+This EM allows designated users to select the random outcome value for a record when REDCap's built-in allocation-based randomization is in use.  Essentially, you the user can bypass the normal randomization step and set the value to their choice.
 
-This EM will inject appropriate UI into the "add/edit" workflow to allow the user to manually select the desired value, and subsequently "claim" the allocated value in the allocation table.
+## Use Cases
+In many studies, use cases arise where REDCap is unavailable at the time of randomization.  The study owners must then use an offline randomization method, such as picking from a set of sealed envelopes or flipping a coin, in order to make a decision so the participant can be processed.  Once REDCap is later available, the study owner wants to set the record to the random output that was used.  This tool permits such a workflow.
 
-If all allocated values are already claimed the UI inputs will remain "disabled"
+When a record is manually randomized, it claims the next available value from the allocation table for the set output, just as it were done using the normal randomization, so your final allocation should still be as configured.
+
+## How it Works
+This module injects a new button into the normal randomization workflow (only for enabled users).  This button allows them to override the normal process and set the outcome.
+
+Note: If all allocated values are already claimed the UI inputs will remain "disabled".  You should monitor your randomization allocation status during a study to ensure you have sufficient unused allocation slots.
 
 Below is a quick visual overview of what the EM will add to the project:
 
@@ -22,4 +28,4 @@ Once a value is set (along with reason for manual selection) the selections will
 ![Fig 5](https://raw.githubusercontent.com/susom/manual-randomization/master/images/log_link.png)
 
 ![Fig 6](https://raw.githubusercontent.com/susom/manual-randomization/master/images/manual_log_page.png)
-A log of Randomizations overridden can be viewed with this EM link
+A log of all manual randomization occurrences can be viewed through the link on the sidebar for this module.
