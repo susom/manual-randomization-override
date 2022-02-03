@@ -25,6 +25,16 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		// Other code to run when object is instantiated
 	}
 
+    /* Sanitize Inputs */
+    public function clean($var) {
+        if(is_array($var)) {
+            array_map("clean",$var);
+        } else {
+            $var = htmlentities(strip_tags($var),ENT_QUOTES);
+        }
+        return $var;
+    }
+    
 	/*
 
 	*/
@@ -47,7 +57,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 			return;
 		}
 
-		$record_id = $_GET["id"];
+		$record_id = $this->clean($_GET["id"]);
 
 		// Is the current instrument the randomization insturment? if no, then do nothing
 
@@ -249,9 +259,9 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		//Look for custom post var for randomizer
 		if(isset($_POST["randomizer_overide"])){
 			$this->loadRandomizationDetails();
-			$record_id = $_POST["record_id"];
+			$record_id = $this->clean($_POST["record_id"]);
 
-			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $_POST[$this->target_field] : null;
+			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $this->clean($_POST[$this->target_field]) : null;
 			if(!empty($desired_target_value)){
 
 				$source_fields 	= array();
@@ -261,7 +271,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				$check_fields 			= array();
 				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
-					$source_field_value 				= !empty($_POST[$source_field_var]) ? $_POST[$source_field_var] : null;
+					$source_field_value 				= !empty($_POST[$source_field_var]) ? $this->clean($_POST[$source_field_var]) : null;
 					$source_fields[$source_field] 	= $source_field_value;
 
 					if(is_null($source_field_value)){
@@ -306,8 +316,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 		// FIND THE randomization details (target + sourcefields) ENTRY IN redcap_randomization
 		$pid 	= $this->getProjectId();
-		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = $pid" ;
-		$q 		= $this->query($sql, array());
+		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = ?" ;
+		$q 		= $this->query($sql, array($pid));
 
 		if($q->num_rows){
 			while ($data = db_fetch_assoc($q)) {
@@ -352,8 +362,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		$project_status 		= " AND project_status = " . $this->project_status; // " AND project_status=0
 		$grouping 				= ""; // " AND group_id=n
 		if(!empty($this->randomizer_rid)){
-			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=".$this->randomizer_rid." AND $source_field_values $project_status $grouping";
-			$q 		= $this->query($sql, array());
+			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=?".$this->randomizer_rid." AND $source_field_values AND project_status = ? $grouping";
+			$q 		= $this->query($sql, array($this->randomizer_rid, $this->project_status));
 			if($q->num_rows){
 				while ($data = db_fetch_assoc($q)) {
 					if(!empty($data["is_used_by"])){
