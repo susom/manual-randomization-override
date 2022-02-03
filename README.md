@@ -20,7 +20,6 @@ When the Manual Selection button is clicked , if pre-requisite fields are filled
 Once a value is set (along with reason for manual selection) the selections will be disabled with the reason displayed in red.
 
 ![Fig 5](https://raw.githubusercontent.com/susom/manual-randomization/master/images/log_link.png)
-A log of Randomizations overridden can be viewed with this EM link
 
 ![Fig 6](https://raw.githubusercontent.com/susom/manual-randomization/master/images/manual_log_page.png)
-
+A log of Randomizations overridden can be viewed with this EM link
