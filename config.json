@@ -3,7 +3,7 @@
 
 	"namespace": "Stanford\\RandomizerOveride",
 
-	"description": "EM that allows manual override of values drawn from Randomized Allocation Tables",
+	"description": "This module allows designated users to select the random outcome value for a record when REDCap's built-in allocation-based randomization is in use. Essentially, you the user can bypass the normal randomization step and set the value to their choice.",
 
 	"documentation": "README.md",
 
