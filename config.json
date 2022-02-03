@@ -3,7 +3,7 @@
 
 	"namespace": "Stanford\\RandomizerOveride",
 
-	"description": "EM that allows manual setting of fields that draw values from Randomized Allocation Tables",
+	"description": "EM that allows manual override of values drawn from Randomized Allocation Tables",
 
 	"documentation": "README.md",
 
@@ -25,16 +25,16 @@
 		"redcap_save_record",
 		"redcap_module_link_check_display"
 	],
-	
-	"framework-version": 4,
 
-	"enable-every-page-hooks-on-system-pages": false,	
+	"framework-version": 8,
+
+	"enable-every-page-hooks-on-system-pages": false,
 
 	"links": {
 		"project": [
 			{
 		        "name": "Log of Manual Randomization Overides",
-		        "icon": "brick",
+		        "icon": "fas fa-table",
 		        "url": "pages/manual_log.php",
 		        "show-header-and-footer": false
 			 }
@@ -46,7 +46,7 @@
 	"no-auth-pages": [
       "ajax/handler"
 	],
-	
+
 	"project-settings": [
 		{
 			"key": "override-user-list",

@@ -11,14 +11,12 @@ $strata_fields          = isset($_POST["strata_fields"])  ? $_POST["strata_field
 $strata_source_lookup   = array_flip($strata_fields);
 $record_id              = isset($_POST["record_id"])  ? $_POST["record_id"] : NULL ;
 
-// $module->emDebug("check allocation for strata and available target values");
 
 switch($action){
     case "check_remaining":
         // Take the current instruments strata values (which may be unsaved)
 
         // check record for remaining strata fields outside of this instrument
-        // TODO THIS BLOCK FROM HERE TO.... 
         $check_fields   = isset($_POST["check_fields"])  ? $_POST["check_fields"] : NULL ;
 
         $q              = REDCap::getData('json', array($record_id) , $check_fields);
@@ -31,7 +29,6 @@ switch($action){
             $source_field = $strata_source_lookup[$strata_fieldname];
             $source_fields[$source_field] = $val;
         }
-        // TODO HERE is similar to a block in RandomizerOveride.php  , break it out.
     break;
 
     default:
