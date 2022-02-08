@@ -47,7 +47,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 			return;
 		}
 
-		$record_id = $_GET["id"];
+		$record_id = filter_var($_GET["id"], FILTER_SANITIZE_NUMBER_INT);
 
 		// Is the current instrument the randomization insturment? if no, then do nothing
 
@@ -249,19 +249,18 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		//Look for custom post var for randomizer
 		if(isset($_POST["randomizer_overide"])){
 			$this->loadRandomizationDetails();
-			$record_id = $_POST["record_id"];
+			$record_id = filter_var($_POST["record_id"], FILTER_SANITIZE_NUMBER_INT);
 
-			$desired_target_value 	= !empty($_POST[$this->target_field]) ? $_POST[$this->target_field] : null;
+			$desired_target_value 	= !empty($_POST[$this->target_field]) ? filter_var($_POST[$this->target_field], FILTER_SANITIZE_STRING) : null;
 			if(!empty($desired_target_value)){
 
 				$source_fields 	= array();
 				// Need to getData for strata fields that are OFF the current instrument then combine with these values before trying to save
 
-				// this is a pain
 				$check_fields 			= array();
 				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
-					$source_field_value 				= !empty($_POST[$source_field_var]) ? $_POST[$source_field_var] : null;
+					$source_field_value 				= !empty($_POST[$source_field_var]) ? filter_var($_POST[$source_field_var], FILTER_SANITIZE_STRING) : null;
 					$source_fields[$source_field] 	= $source_field_value;
 
 					if(is_null($source_field_value)){
@@ -269,24 +268,14 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 					}
 				}
 
-				// look up remaining strata (may be hiding in other instruments)
-				$q              = REDCap::getData('json', array($record_id) , $check_fields);
-				$results        = json_decode($q,true);
-				$record         = current($results);
-				$remainder      = array_filter($record);
-
-				//loop through any found strata values and fill in the full source_fields array
-				foreach($remainder as $strata_fieldname => $val){
-					$source_field = $strata_source_lookup[$strata_fieldname];
-					$source_fields[$source_field] = $val;
-				}
+                $source_fields = $this->remainingStrataLookUp($record_id, $strata_source_lookup, $check_fields, $source_fields);
 
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_fields);
 
 				// STORE INTO EM Project Settings REcord of Manual Overide
 				$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 				$overriden_records 	= json_decode($temp, 1);
-				$reason 			= !empty($_POST["custom_override_reason"]) ? $_POST["custom_override_reason"] : "n/a";
+				$reason 			= !empty($_POST["custom_override_reason"]) ? filter_var($_POST["custom_override_reason"], FILTER_SANITIZE_STRING) : "n/a";
 				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason, "project_status" => $this->project_status);
 				$this->setProjectSetting(self::KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
 
@@ -297,6 +286,21 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		}
 	}
 
+    public function remainingStrataLookUp($record_id, $strata_source_lookup, $check_fields, $source_fields = array()){
+        $q              = REDCap::getData('json', array($record_id) , $check_fields);
+        $results        = json_decode($q,true);
+        $record         = current($results);
+        $remainder      = array_filter($record);
+
+        //loop through any found strata values and fill in the full source_fields array
+        foreach($remainder as $strata_fieldname => $val){
+            $source_field = $strata_source_lookup[$strata_fieldname];
+            $source_fields[$source_field] = $val;
+        }
+
+        return $source_fields;
+    }
+
 	/*
 		Returns randomization details like RID + strata details + target field name
 	*/
@@ -306,8 +310,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 		// FIND THE randomization details (target + sourcefields) ENTRY IN redcap_randomization
 		$pid 	= $this->getProjectId();
-		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = $pid" ;
-		$q 		= $this->query($sql, array());
+		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = ?" ;
+		$q 		= $this->query($sql, array($pid));
 
 		if($q->num_rows){
 			while ($data = db_fetch_assoc($q)) {
@@ -337,7 +341,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	public function checkAllocationAvailability($source_field_arr){
 		$this->loadRandomizationDetails();
 
-		$temp = array();
+		$temp           = array();
+        $param_array    = array();
 		foreach($source_field_arr as $source_field => $val){
 			if(empty($val)){
 				//empty val, so dont bother
@@ -345,21 +350,21 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				return array("error" => "incomplete strata");
 				break;
 			}
-			$temp[] = "$source_field = $val";
+			$temp[]         = "$source_field = ?";
+            $param_array[]  = $val;
 		}
 		$source_field_values 	= implode(" AND ", $temp);
 		$target_field_values 	= array();
-		$project_status 		= " AND project_status = " . $this->project_status; // " AND project_status=0
-		$grouping 				= ""; // " AND group_id=n
 		if(!empty($this->randomizer_rid)){
-			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid=".$this->randomizer_rid." AND $source_field_values $project_status $grouping";
-			$q 		= $this->query($sql, array());
+			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid = ? AND project_status = ? AND $source_field_values";
+			$params = array($this->randomizer_rid, $this->project_status);
+            $params = array_merge($params, $param_array);
+            $q 		= $this->query($sql, $params);
 			if($q->num_rows){
 				while ($data = db_fetch_assoc($q)) {
 					if(!empty($data["is_used_by"])){
 						continue;
 					}
-					$temp 					= array();
 					$target_field_values[] 	= $data["target_field"];
 				}
 			}
@@ -376,17 +381,17 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		$this->loadRandomizationDetails();
 
 		// SELECT TO FIND FIRST AVAILABLE TARGET VALUE WITH MATCHING STRATA
-		$temp = array();
+		$temp           = array();
+        $param_array    = array();
 		foreach($source_field_arr as $source_field => $val){
-			$temp[] = "$source_field = $val";
+			$temp[]         = "$source_field = ?";
+            $param_array[]  = $val;
 		}
 		$source_field_values 	= implode(" AND ", $temp);
-		$project_status 		= " AND project_status = " . $this->project_status; // " AND project_status=0
-		$grouping 				= ""; // " AND group_id=n
-
-		$sql 					= "SELECT * FROM redcap_randomization_allocation WHERE $source_field_values AND target_field=$desired_target_value $project_status $grouping" ;
-		$q 						= $this->query($sql, array());
-		// $this->emDebug("sql to search for available strata + target values, ", $sql);
+		$sql 					= "SELECT * FROM redcap_randomization_allocation WHERE project_status = ? AND target_field= ? AND $source_field_values" ;
+        $params = array($this->project_status, $desired_target_value);
+        $params = array_merge($params, $param_array);
+        $q 						= $this->query($sql, $params);
 
 		if($q->num_rows){
 			while ($data = db_fetch_assoc($q)) {
@@ -398,8 +403,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 			if(isset($available_aid)){
 				// THEN UPDATE - THIS IS GOOD
-				$sql 	= "UPDATE redcap_randomization_allocation SET is_used_by=$record_id WHERE aid=$available_aid";
-				$q 		= $this->query($sql, array());
+				$sql 	= "UPDATE redcap_randomization_allocation SET is_used_by = ? WHERE aid = ?";
+				$q 		= $this->query($sql, array($record_id, $available_aid));
 			}
 		}
 	}
