@@ -81,6 +81,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		}
 
 		$ajaxurl 	=  $this->getUrl('ajax/handler.php');
+
+        $this->emDebug("did it not push?");
 		?>
 		<script>
 		//  this over document.ready because we need this last!
