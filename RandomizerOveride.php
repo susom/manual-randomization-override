@@ -290,7 +290,10 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
         $q              = REDCap::getData('json', array($record_id) , $check_fields);
         $results        = json_decode($q,true);
         $record         = current($results);
-        $remainder      = array_filter($record);
+
+        $remainder      = array_filter($record, function($v){
+            return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+        });
 
         //loop through any found strata values and fill in the full source_fields array
         foreach($remainder as $strata_fieldname => $val){
@@ -343,8 +346,9 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 		$temp           = array();
         $param_array    = array();
-		foreach($source_field_arr as $source_field => $val){
-			if(empty($val)){
+
+        foreach($source_field_arr as $source_field => $val){
+			if(empty($val) && !isset($val) ){
 				//empty val, so dont bother
 				$this->emDebug("missing sourcefield val for $source_field");
 				return array("error" => "incomplete strata");
@@ -355,7 +359,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		}
 		$source_field_values 	= implode(" AND ", $temp);
 		$target_field_values 	= array();
-		if(!empty($this->randomizer_rid)){
+
+        if(!empty($this->randomizer_rid)){
 			$sql 	= "SELECT * FROM redcap_randomization_allocation WHERE rid = ? AND project_status = ? AND $source_field_values";
 			$params = array($this->randomizer_rid, $this->project_status);
             $params = array_merge($params, $param_array);
