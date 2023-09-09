@@ -55,12 +55,12 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
         list($randField, $randValue) = Randomization::getRandomizedValue($record_id);
         if (!empty($randValue)) {
 			$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
-			$overriden_records 	= json_decode($temp,1);
+			$overridden_records = json_decode($temp,1);
 			// if yes, then see if it was overrided,
-			if( isset($overriden_records[$record_id]) ){
-				$reason 		= $overriden_records[$record_id]["reason"];
-				$change_date 	= $overriden_records[$record_id]["date"];
-				$change_user 	= $overriden_records[$record_id]["user"];
+			if( isset($overridden_records[$record_id]) ){
+				$reason 		= $overridden_records[$record_id]["reason"];
+				$change_date 	= $overridden_records[$record_id]["date"];
+				$change_user 	= $overridden_records[$record_id]["user"];
 				?>
 				<script>
 				$(window).on('load', function () {
@@ -81,6 +81,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 		}
 
 		$ajaxurl 	=  $this->getUrl('ajax/handler.php');
+        //TODO: Replace ajax_handler with JSMO
 
         $this->emDebug("did it not push?");
 		?>
@@ -236,7 +237,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 	}
 
 	/*
-		Inserting UI to allow for MANual Override fo Randomization Fields
+		Inserting Page link for override table
 	*/
 	public function redcap_module_link_check_display($project_id, $link){
 		if($this->hasPermission()){
@@ -247,8 +248,9 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 	/*
 		Updates allocation table when manually overidden and saved
 	*/
-	public function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance=1) {
-		//Look for custom post var for randomizer
+	public function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance) {
+
+		// Look for custom post var for randomizer
 		if(isset($_POST["randomizer_override"])){
 			$this->loadRandomizationDetails();
 			$record_id = htmlspecialchars($_POST["record_id"], ENT_QUOTES);
@@ -265,8 +267,10 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 				$check_fields 			= array();
 				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
-					$source_field_value 				= !empty($_POST[$source_field_var]) ? filter_var($_POST[$source_field_var], FILTER_SANITIZE_STRING) : null;
-					$source_fields[$source_field] 	= $source_field_value;
+					$source_field_value 				= !empty($_POST[$source_field_var]) ?
+                        htmlspecialchars($_POST[$source_field_var], ENT_QUOTES) :
+                        null;
+					$source_fields[$source_field] = $source_field_value;
 
 					if(is_null($source_field_value)){
 						array_push($check_fields, $source_field_var);
@@ -277,14 +281,21 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_fields);
 
-				// STORE INTO EM Project Settings REcord of Manual Override
+				// STORE INTO EM Project Settings Record of Manual Override
 				$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
-				$overriden_records 	= json_decode($temp, 1);
-				$reason 			= !empty($_POST["custom_override_reason"]) ? filter_var($_POST["custom_override_reason"], FILTER_SANITIZE_STRING) : "n/a";
-				$overriden_records[$record_id] = array("user" => USERID, "date" => Date("m/d/Y"), "reason" => $reason, "project_status" => $this->project_status);
-				$this->setProjectSetting(self::KEY_OVERRIDE_RECORDS, json_encode($overriden_records));
-
-				REDCap::logEvent("randomization manually overidden for this record", $desired_target_value);
+				$overridden_records = json_decode($temp, 1);
+				$reason 			= !empty($_POST["custom_override_reason"]) ?
+                    htmlentities($_POST["custom_override_reason"], ENT_QUOTES) :
+                    "n/a";
+				$User = $this->getUser();
+                $overridden_records[$record_id] = array(
+                    "user" => $User->getUsername(),
+                    "date" => Date("m/d/Y"),
+                    "reason" => $reason,
+                    "project_status" => $this->project_status
+                );
+				$this->setProjectSetting(self::KEY_OVERRIDE_RECORDS, json_encode($overridden_records));
+				REDCap::logEvent("randomization manually overridden for this record", $desired_target_value);
 			}else{
 				$this->emDebug("missing target value");
 			}
@@ -298,6 +309,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
         $remainder      = array_filter($record, function($v){
             return $v !== false && !is_null($v) && ($v != '' || $v == '0');
+            //TODO: Isn't this the definition of array_filter without a callback?
         });
 
         //loop through any found strata values and fill in the full source_fields array
@@ -317,7 +329,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 		global $Proj;
 
         // Only continue if Randomization is enabled
-        if ($this->randomization = $Proj->project["randomization"]) {
+        if ($Proj->project["randomization"]) {
 
             // FIND THE randomization details (target field + source fields) ENTRY IN redcap_randomization
             $pid 	= $this->getProjectId();
@@ -419,6 +431,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 				// THEN UPDATE - THIS IS GOOD
 				$sql 	= "UPDATE redcap_randomization_allocation SET is_used_by = ? WHERE aid = ?";
 				$q 		= $this->query($sql, array($record_id, $available_aid));
+                //TODO: Check for errors
 			}
 		}
 	}
@@ -428,20 +441,20 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 	*/
 	public function getManualRandomizationOverrideLogs(){
 		$this->loadRandomizationDetails();
-		$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
-		$overriden_records 	= json_decode($temp,1);
-		ksort($overriden_records);
+		$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
+		$overridden_records = json_decode($temp,1);
+		ksort($overridden_records);
 
-		$recordids  = array_keys($overriden_records);
+		$record_ids = array_keys($overridden_records);
 		$fields     = array("record_id", $this->target_field);
-		$q          = \REDCap::getData('json',$recordids , $fields);
+		$q          = \REDCap::getData('json',$record_ids , $fields);
 		$results    = json_decode($q,true);
 
 		foreach($results as $result){
 			$record_id 	= $result["record_id"];
 			$outcome 	= $result["outcome"];
-			$overriden_records[$record_id]["grouping"] = $outcome;
+			$overridden_records[$record_id]["grouping"] = $outcome;
 		}
-		return $overriden_records;
+		return $overridden_records;
 	}
 }
