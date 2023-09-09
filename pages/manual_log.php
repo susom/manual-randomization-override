@@ -11,8 +11,8 @@ echo "<div class='container'>";
 echo "<table class='table' id='man_rando_logs'>";
 echo "<thead><tr><th>Record ID</th><th>userid</th><th>project status</th><th>Change Reason</th><th>date</th><th>Grouping</th></thead></tr>";
 echo "<tbody>";
-foreach($overridden_records as $record_id => $record_raw){
-    $record = $module->escape($record_raw);
+foreach($overridden_records as $record_id => $record){
+    // $record = $module->escape($record_raw);
     echo "<tr>";
     echo "<td>$record_id</td>";
     echo "<td>".$record["user"]."</td>";

@@ -444,8 +444,9 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 		$results    = json_decode($q,true);
 
 		foreach($results as $result){
-			$record_id 	= $result["record_id"];
-			$outcome 	= $result["outcome"];
+			$record_id 	= $this->escape($result["record_id"]);
+			$outcome 	= $this->escape($result["outcome"]);
+            // TODO: @IRVINS - this "outcome" above doesn't look right
 			$overridden_records[$record_id]["grouping"] = $outcome;
 		}
 		return $overridden_records;
