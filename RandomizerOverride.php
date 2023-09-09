@@ -4,7 +4,7 @@ namespace Stanford\RandomizerOverride;
 require_once "emLoggerTrait.php";
 use REDCap;
 use Randomization;
-use Records;
+
 class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
@@ -47,7 +47,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 			return;
 		}
 
-		$record_id = htmlspecialchars($_GET["id"], ENT_QUOTES);
+		$record_id = $this->escape($_GET["id"]);
 
 		// Is the current instrument the randomization insturment? if no, then do nothing
 
@@ -56,7 +56,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
         if (!empty($randValue)) {
 			$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 			$overridden_records = json_decode($temp,1);
-			// if yes, then see if it was overrided,
+			// if yes, then see if it was overridden,
 			if( isset($overridden_records[$record_id]) ){
 				$reason 		= $overridden_records[$record_id]["reason"];
 				$change_date 	= $overridden_records[$record_id]["date"];
@@ -253,12 +253,9 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 		// Look for custom post var for randomizer
 		if(isset($_POST["randomizer_override"])){
 			$this->loadRandomizationDetails();
-			$record_id = htmlspecialchars($_POST["record_id"], ENT_QUOTES);
+			$record_id = $this->escape($_POST["record_id"]);
 
-			$desired_target_value = !empty($_POST[$this->target_field]) ?
-                htmlspecialchars($_POST[$this->target_field], ENT_QUOTES) :
-                null;
-
+			$desired_target_value = $this->escape($this->target_field);
 			if(!empty($desired_target_value)){
 
 				$source_fields 	= array();
@@ -267,10 +264,8 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 				$check_fields 			= array();
 				$strata_source_lookup   = array_flip($this->source_fields);
 				foreach($this->source_fields as $source_field => $source_field_var){
-					$source_field_value 				= !empty($_POST[$source_field_var]) ?
-                        htmlspecialchars($_POST[$source_field_var], ENT_QUOTES) :
-                        null;
-					$source_fields[$source_field] = $source_field_value;
+					$source_field_value 			= $this->escape($_POST[$source_field_var]);
+					$source_fields[$source_field]   = $source_field_value;
 
 					if(is_null($source_field_value)){
 						array_push($check_fields, $source_field_var);
@@ -285,7 +280,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 				$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 				$overridden_records = json_decode($temp, 1);
 				$reason 			= !empty($_POST["custom_override_reason"]) ?
-                    htmlentities($_POST["custom_override_reason"], ENT_QUOTES) :
+                    $this->escape($_POST["custom_override_reason"]) :
                     "n/a";
 				$User = $this->getUser();
                 $overridden_records[$record_id] = array(
@@ -306,25 +301,22 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
         $q              = REDCap::getData('json', array($record_id) , $check_fields);
         $results        = json_decode($q,true);
         $record         = current($results);
-
-        $remainder      = array_filter($record, function($v){
-            return $v !== false && !is_null($v) && ($v != '' || $v == '0');
-            //TODO: Isn't this the definition of array_filter without a callback?
-        });
+        $remainder      = array_filter($record);
 
         //loop through any found strata values and fill in the full source_fields array
         foreach($remainder as $strata_fieldname => $val){
             $source_field = $strata_source_lookup[$strata_fieldname];
             $source_fields[$source_field] = $val;
         }
-
+        $this->emDebug("strata source fields", $source_fields);
         return $source_fields;
     }
 
 	/*
 		Returns randomization details like RID + strata details + target field name
 	*/
-	public function loadRandomizationDetails(){
+	public function loadRandomizationDetails(): void
+    {
 		/** @var \Project $Proj **/
 		global $Proj;
 
@@ -370,6 +362,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
         foreach($source_field_arr as $source_field => $val){
 			if(empty($val) && !isset($val) ){
+                // TODO: @IRVINS I don't understand the !isset above
 				//empty val, so dont bother
 				$this->emDebug("missing sourcefield val for $source_field");
 				return array("error" => "incomplete strata");
@@ -447,7 +440,7 @@ class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
 		$record_ids = array_keys($overridden_records);
 		$fields     = array("record_id", $this->target_field);
-		$q          = \REDCap::getData('json',$record_ids , $fields);
+		$q          = REDCap::getData('json',$record_ids , $fields);
 		$results    = json_decode($q,true);
 
 		foreach($results as $result){

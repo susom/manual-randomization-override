@@ -4,15 +4,15 @@ namespace Stanford\RandomizerOverride;
 
 require_once APP_PATH_DOCROOT . 'ProjectGeneral/header.php';
 
-
-$overriden_records = $module->getManualRandomizationOverrideLogs();
+$overridden_records = $module->getManualRandomizationOverrideLogs();
 
 echo "<h3>Log of Manual Randomization Overrides</h3>";
 echo "<div class='container'>";
 echo "<table class='table' id='man_rando_logs'>";
 echo "<thead><tr><th>Record ID</th><th>userid</th><th>project status</th><th>Change Reason</th><th>date</th><th>Grouping</th></thead></tr>";
 echo "<tbody>";
-foreach($overriden_records as $record_id => $record){
+foreach($overridden_records as $record_id => $record_raw){
+    $record = $module->escape($record_raw);
     echo "<tr>";
     echo "<td>$record_id</td>";
     echo "<td>".$record["user"]."</td>";
