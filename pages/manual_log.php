@@ -1,6 +1,6 @@
 <?php
 namespace Stanford\RandomizerOverride;
-/** @var \Stanford\RandomizerOverride\RandomizerOverride $module */
+/** @var RandomizerOverride $module **/
 
 require_once APP_PATH_DOCROOT . 'ProjectGeneral/header.php';
 
