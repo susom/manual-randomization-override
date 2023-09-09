@@ -1,6 +1,6 @@
 <?php
-namespace Stanford\RandomizerOveride;
-/** @var \Stanford\RandomizerOveride\RandomizerOveride $module */
+namespace Stanford\RandomizerOverride;
+/** @var \Stanford\RandomizerOverride\RandomizerOverride $module */
 
 use REDCap;
 

@@ -1,53 +1,53 @@
 <?php
-namespace Stanford\RandomizerOveride;
+namespace Stanford\RandomizerOverride;
 
 require_once "emLoggerTrait.php";
 use REDCap;
 use Randomization;
 use Records;
-
-class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
+class RandomizerOverride extends \ExternalModules\AbstractExternalModule {
 
     use emLoggerTrait;
 
-	const KEY_OVERRIDE_RECORDS 	= "override-record-list";
+    const KEY_OVERRIDE_RECORDS 	= "override-record-list";
 	const KEY_OVERRIDE_USERS 	= "override-user-list";
 
 	private $randomizer_rid,
+            $group_by,
 			$target_field,
 			$source_fields,
 			$randomization,
 			$project_status,
 			$grouping;
 
-    public function __construct() {
-		parent::__construct();
-		// Other code to run when object is instantiated
+    /**
+     * Determine if current user has permission to override randomization
+     * @return bool
+     */
+    public function hasPermission(){
+        if ($User = $this->getUser()) {
+            $userid = $User->getUsername();
+            $override_users = array_map('trim', explode(',', $this->getProjectSetting(self::KEY_OVERRIDE_USERS)));
+            if(in_array($userid, $override_users)){
+                return true;
+            }
+        };
+		return false;
 	}
 
 	/*
+		Inserting UI to allow for Manual Override of Randomization Fields
+	*/
+	public function redcap_data_entry_form_top( $project_id, $record, $instrument, $event_id, $group_id, $repeat_instance) {
 
-	*/
-	public function hasPermission(){
-		// if not, check if person has user rigths to do manual override?
-		$overide_users = array_map('trim', explode(',', $this->getProjectSetting(self::KEY_OVERRIDE_USERS)));
-		if(!in_array( USERID, $overide_users)){
-			return false;
-		}
-		return true;
-	}
-	/*
-		Inserting UI to allow for MANual Overide fo Randomization Fields
-	*/
-	public function redcap_data_entry_form_top( $project_id, $record, $instrument, $event_id, $group_id = NULL, $repeat_instance = 1 ) {
 		$this->loadRandomizationDetails();
 
 		// Randomization isn't enabled
-		if(empty($this->randomization) ){
+		if(empty($this->randomization)){
 			return;
 		}
 
-		$record_id = filter_var($_GET["id"], FILTER_SANITIZE_NUMBER_INT);
+		$record_id = htmlspecialchars($_GET["id"], ENT_QUOTES);
 
 		// Is the current instrument the randomization insturment? if no, then do nothing
 
@@ -98,10 +98,10 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				clone_or_show.prepend(custom_label);
 
 
-				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_overide").val(true);
+				var custom_hidden 	= $("<input>").attr("type","hidden").prop("name","randomizer_override").val(true);
 				clone_or_show.prepend(custom_hidden);
 
-				var custom_reason 	= $("<input>").attr("type","text").attr("name","custom_override_reason").prop("placeholder" , "reason for using overide?").addClass("custom_reason");
+				var custom_reason 	= $("<input>").attr("type","text").attr("name","custom_override_reason").prop("placeholder" , "reason for using override?").addClass("custom_reason");
 				clone_or_show.append(custom_reason);
 
 				// var custom_or 		= $("<small>").addClass("custom_or").text("*Manually override and set randomization variable as:");
@@ -114,7 +114,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 				//ONLY ENABLE MANUAL IF STRATA ARE ALL FILLED
 				var source_fields  	= <?= json_encode($this->source_fields) ?>;
-				var show_overide 	= $("<button>").addClass("jqbuttonmed ui-button ui-corner-all ui-widget btn-danger custom_btn").text("Manual Selection").click(function(e){
+				var show_override 	= $("<button>").addClass("jqbuttonmed ui-button ui-corner-all ui-widget btn-danger custom_btn").text("Manual Selection").click(function(e){
 					e.preventDefault();
 
 					if(clone_or_show.is(":visible")){
@@ -132,7 +132,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				});
 
 				$("#redcapRandomizeBtn").after(clone_or_show);
-				$("#redcapRandomizeBtn").after(show_overide);
+				$("#redcapRandomizeBtn").after(show_override);
 
 				for(var i in source_fields){
 					$("input[name='"+source_fields[i]+"']").siblings( ".choicevert" ).find(":input").change(function(){
@@ -141,8 +141,8 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 				}
 			}
 
-			// CHECK NEWLY (not yet saved) INPUT STRATA ON CURRENT INSTRUMENT, BUT ALSO CHECK SAVED STRATA FROM OTHER INSTURMENTS
-			function checkStrataComplete(source_fields, overide_ui_el){
+			// CHECK NEWLY (not yet saved) INPUT STRATA ON CURRENT INSTRUMENT, BUT ALSO CHECK SAVED STRATA FROM OTHER INSTRUMENTS
+			function checkStrataComplete(source_fields, override_ui_el){
 				var complete 			= true;
 				var source_field_values = {};
 				var check_fields 		= [];
@@ -166,21 +166,21 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 					dataType: 'json',
 					success:function(result){
 						// preset them to show none avaialble, then unset if they actualy are available
-						overide_ui_el.find(".choicevert").unbind("click");
+						override_ui_el.find(".choicevert").unbind("click");
 						if(result.hasOwnProperty("error")){
-							overide_ui_el.find(".choicevert").click(function(){
+							override_ui_el.find(".choicevert").click(function(){
 								alert("Incomplete strata, allocation values unavailable.");
 							});
 						}else{
-							overide_ui_el.find(".choicevert").click(function(){
+							override_ui_el.find(".choicevert").click(function(){
 								alert("No allocations for this target value are available for this combination of strata.");
 							});
 
 							if( !$.isEmptyObject(result) ){
-								// enable manual overide inputs
+								// enable manual override inputs
 								for(var target_value in result){
-									overide_ui_el.find("input[value='"+target_value+"'").prop("disabled",false);
-									overide_ui_el.find("input[value='"+target_value+"'").parents(".choicevert").unbind("click");
+									override_ui_el.find("input[value='"+target_value+"'").prop("disabled",false);
+									override_ui_el.find("input[value='"+target_value+"'").parents(".choicevert").unbind("click");
 								}
 							}
 						}
@@ -236,7 +236,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	}
 
 	/*
-		Inserting UI to allow for MANual Overide fo Randomization Fields
+		Inserting UI to allow for MANual Override fo Randomization Fields
 	*/
 	public function redcap_module_link_check_display($project_id, $link){
 		if($this->hasPermission()){
@@ -249,11 +249,14 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	*/
 	public function redcap_save_record($project_id, $record, $instrument, $event_id, $group_id, $survey_hash, $response_id, $repeat_instance=1) {
 		//Look for custom post var for randomizer
-		if(isset($_POST["randomizer_overide"])){
+		if(isset($_POST["randomizer_override"])){
 			$this->loadRandomizationDetails();
-			$record_id = filter_var($_POST["record_id"], FILTER_SANITIZE_NUMBER_INT);
+			$record_id = htmlspecialchars($_POST["record_id"], ENT_QUOTES);
 
-			$desired_target_value 	= !empty($_POST[$this->target_field]) ? filter_var($_POST[$this->target_field], FILTER_SANITIZE_STRING) : null;
+			$desired_target_value = !empty($_POST[$this->target_field]) ?
+                htmlspecialchars($_POST[$this->target_field], ENT_QUOTES) :
+                null;
+
 			if(!empty($desired_target_value)){
 
 				$source_fields 	= array();
@@ -274,7 +277,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 
 				$this->claimAllocationValue($record_id, $desired_target_value, $source_fields);
 
-				// STORE INTO EM Project Settings REcord of Manual Overide
+				// STORE INTO EM Project Settings REcord of Manual Override
 				$temp 				= $this->getProjectSetting(self::KEY_OVERRIDE_RECORDS);
 				$overriden_records 	= json_decode($temp, 1);
 				$reason 			= !empty($_POST["custom_override_reason"]) ? filter_var($_POST["custom_override_reason"], FILTER_SANITIZE_STRING) : "n/a";
@@ -310,34 +313,38 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 		Returns randomization details like RID + strata details + target field name
 	*/
 	public function loadRandomizationDetails(){
-		/** @var \Project $Proj */
+		/** @var \Project $Proj **/
 		global $Proj;
 
-		// FIND THE randomization details (target + sourcefields) ENTRY IN redcap_randomization
-		$pid 	= $this->getProjectId();
-		$sql 	= "SELECT * FROM redcap_randomization WHERE project_id = ?" ;
-		$q 		= $this->query($sql, array($pid));
+        // Only continue if Randomization is enabled
+        if ($this->randomization = $Proj->project["randomization"]) {
 
-		if($q->num_rows){
-			while ($data = db_fetch_assoc($q)) {
-				$this->randomizer_rid 	= $data["rid"];
-				$this->target_field 	= $data["target_field"];
+            // FIND THE randomization details (target field + source fields) ENTRY IN redcap_randomization
+            $pid 	= $this->getProjectId();
+            $sql 	= "SELECT * FROM redcap_randomization WHERE project_id = ?" ;
+            $q 		= $this->query($sql, array($pid));
 
-				$this->group_by 		= $data["group_by"];
-				$this->grouping 		= null;
-				$this->project_status 	= $Proj->project["status"];
-				$this->randomization 	= $Proj->project["randomization"];
+            if($q->num_rows){
+                while ($data = db_fetch_assoc($q)) {
+                    $this->randomizer_rid 	= $data["rid"];
+                    $this->target_field 	= $data["target_field"];
+                    $this->group_by 		= $data["group_by"];
+                    $this->grouping 		= null;
+                    $this->project_status 	= $Proj->project["status"];
+                    $this->randomization 	= $Proj->project["randomization"];
 
-				$non_empty 				= array_filter($data);
-				$source_fields_arr		= array();
-				foreach($non_empty as $key => $val){
-					if(strpos($key, "source_field") > -1){
-						$source_fields_arr[$key] = $val;
-					}
-				}
-				$this->source_fields = $source_fields_arr;
-			}
-		}
+                    // Remove non-specified source fields/event combos
+                    $non_empty 				= array_filter($data);
+                    $source_fields_arr		= array();
+                    foreach($non_empty as $key => $val){
+                        if(strpos($key, "source_field") > -1){
+                            $source_fields_arr[$key] = $val;
+                        }
+                    }
+                    $this->source_fields = $source_fields_arr;
+                }
+            }
+        }
 	}
 
 	/*
@@ -419,7 +426,7 @@ class RandomizerOveride extends \ExternalModules\AbstractExternalModule {
 	/*
 		get logs of all manual randomizers
 	*/
-	public function getManualRandomizationOverideLogs(){
+	public function getManualRandomizationOverrideLogs(){
 		$this->loadRandomizationDetails();
 		$temp 				= $this->getProjectSetting(KEY_OVERRIDE_RECORDS);
 		$overriden_records 	= json_decode($temp,1);

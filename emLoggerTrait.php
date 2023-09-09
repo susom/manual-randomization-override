@@ -1,6 +1,6 @@
 <?php
-namespace Stanford\RandomizerOveride;
-/** @var RandomizerOveride $this */
+namespace Stanford\RandomizerOverride;
+/** @var RandomizerOverride $this */
 
 trait emLoggerTrait
 {

@@ -1,13 +1,13 @@
 <?php
-namespace Stanford\RandomizerOveride;
-/** @var \Stanford\RandomizerOveride\RandomizerOveride $module */
+namespace Stanford\RandomizerOverride;
+/** @var \Stanford\RandomizerOverride\RandomizerOverride $module */
 
 require_once APP_PATH_DOCROOT . 'ProjectGeneral/header.php';
 
 
-$overriden_records = $module->getManualRandomizationOverideLogs();
+$overriden_records = $module->getManualRandomizationOverrideLogs();
 
-echo "<h3>Log of Manual Randomization Overides</h3>";
+echo "<h3>Log of Manual Randomization Overrides</h3>";
 echo "<div class='container'>";
 echo "<table class='table' id='man_rando_logs'>";
 echo "<thead><tr><th>Record ID</th><th>userid</th><th>project status</th><th>Change Reason</th><th>date</th><th>Grouping</th></thead></tr>";
